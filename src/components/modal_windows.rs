@@ -7,7 +7,7 @@ use crate::MyApp;
 pub enum ModalWindowState {
     Authenticate,
     CreateCategory(String),
-    UpdateCategory(String),
+    RenameCategory(String),
     CreateSubCategory(String),
 }
 
@@ -19,6 +19,7 @@ pub enum DialogResult {
 pub enum ShowDialogResult {
     None,
     CreatedCategory(String),
+    RenameCategory(String),
     CreatedSubCategory(String),
     CloseDialog,
 }
@@ -63,12 +64,15 @@ pub fn render_dialog(app: &mut MyApp, ctx: &egui::Context) -> Option<ShowDialogR
                 }
             }
         }
-        ModalWindowState::UpdateCategory(category) => {
+        ModalWindowState::RenameCategory(category) => {
             if let Some(dialog_result) =
-                render_edit_modal(ctx, "Enter category name:", "Edit", category)
+                render_edit_modal(ctx, "Enter category name:", "Rename", category)
             {
-                if let DialogResult::Ok = dialog_result {}
-                result = Some(ShowDialogResult::CloseDialog);
+                if let DialogResult::Ok = dialog_result {
+                    result = Some(ShowDialogResult::RenameCategory(category.to_string()));
+                } else {
+                    result = Some(ShowDialogResult::CloseDialog);
+                }
             }
         }
 

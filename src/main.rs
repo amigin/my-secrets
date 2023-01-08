@@ -172,6 +172,18 @@ impl eframe::App for MyApp {
                     self.select_category(Some(category));
                     self.modal_dialog = None;
                 }
+                ShowDialogResult::RenameCategory(category) => {
+                    let from = self.selected_category.as_ref().unwrap().to_string();
+                    self.select_category(None);
+
+                    let removed = self.categories.remove(&from).unwrap();
+
+                    self.categories.insert(category.clone(), removed);
+
+                    self.select_category(Some(category));
+                    self.modal_dialog = None;
+                    self.has_not_saved_data = true;
+                }
             }
             return;
         }
@@ -221,9 +233,9 @@ impl eframe::App for MyApp {
                     };
 
                     if let Some(selected_category) = &self.selected_category {
-                        if ui.small_button("Edit category").clicked() {
+                        if ui.small_button("Rename category").clicked() {
                             self.modal_dialog =
-                                Some(ModalWindowState::UpdateCategory(selected_category.clone()));
+                                Some(ModalWindowState::RenameCategory(selected_category.clone()));
                         };
 
                         if ui.small_button("Add subcategory").clicked() {
