@@ -331,13 +331,13 @@ fn main() {
         Box::new(|cc| {
             cc.egui_ctx.set_style(style);
             cc.egui_ctx.set_pixels_per_point(2.0);
-            cc.egui_ctx.set_fonts(configure_fonts());
+            configure_fonts(&cc.egui_ctx);
             Box::new(app)
         }),
     );
 }
 
-fn configure_fonts() -> FontDefinitions {
+fn configure_fonts(ctx: &egui::Context) {
     let mut font_def = FontDefinitions::default();
 
     font_def
@@ -345,4 +345,16 @@ fn configure_fonts() -> FontDefinitions {
         .insert("MesloLGS".to_string(), FontData::from_static(FONT_MESLO));
 
     font_def
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .insert(0, "MesloLGS".to_owned());
+
+    font_def
+        .families
+        .entry(egui::FontFamily::Monospace)
+        .or_default()
+        .push("MesloLGS".to_owned());
+
+    ctx.set_fonts(font_def);
 }

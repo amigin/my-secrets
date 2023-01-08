@@ -87,11 +87,12 @@ pub fn render_dialog(app: &mut MyApp, ctx: &egui::Context) -> Option<ShowDialogR
                         .insert(sub_category.to_string(), "".to_string());
 
                     app.has_not_saved_data = true;
+                    result = Some(ShowDialogResult::CreatedSubCategory(
+                        sub_category.to_string(),
+                    ));
+                } else {
+                    result = Some(ShowDialogResult::CloseDialog);
                 }
-
-                result = Some(ShowDialogResult::CreatedSubCategory(
-                    sub_category.to_string(),
-                ));
             }
         }
     }
