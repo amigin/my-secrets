@@ -321,18 +321,19 @@ fn main() {
     };
 
     let mut native_options = eframe::NativeOptions::default();
-    native_options.follow_system_theme = true;
     native_options.centered = true;
-    native_options.decorated = true;
+    //native_options.viewport.inner_size = Some(egui::vec2(1024.0 * 4.0, 768.0 * 4.0));
+    //native_options.decorated = true;
 
-    eframe::run_native(
+    let _ = eframe::run_native(
         "My secrets",
         native_options,
         Box::new(|cc| {
+            //cc.egui_ctx.set_zoom_factor(0.5);
             cc.egui_ctx.set_style(style);
-            cc.egui_ctx.set_pixels_per_point(2.0);
+            cc.egui_ctx.set_pixels_per_point(1.0);
             configure_fonts(&cc.egui_ctx);
-            Box::new(app)
+            Ok(Box::new(app))
         }),
     );
 }
@@ -340,9 +341,10 @@ fn main() {
 fn configure_fonts(ctx: &egui::Context) {
     let mut font_def = FontDefinitions::default();
 
-    font_def
-        .font_data
-        .insert("MesloLGS".to_string(), FontData::from_static(FONT_MESLO));
+    font_def.font_data.insert(
+        "MesloLGS".to_string(),
+        FontData::from_static(FONT_MESLO).into(),
+    );
 
     font_def
         .families
