@@ -63,13 +63,20 @@ pub fn save_current_as_backup(file_name: &str) {
 
     match read_file_content {
         Ok(content) => {
+            let folder_to_create = compile_full_filename("backups");
+
+            if !std::path::Path::new(folder_to_create.as_str()).exists() {
+                fs::create_dir(folder_to_create.as_str()).unwrap();
+            }
+
             let backup_file_name = compile_full_filename(
                 format!(
                     "backups/{}.bak",
                     &DateTimeAsMicroseconds::now().to_rfc3339()[..19],
                 )
                 .as_str(),
-            );
+            )
+            .replace(":", "-");
             let res = fs::write(backup_file_name.as_str(), content);
 
             if let Err(err) = res {
