@@ -7,6 +7,20 @@ pub struct SettingsModel {
 
 impl SettingsModel {
     pub fn read() -> Self {
+        let key_chain = security_framework::os::macos::keychain::SecKeychain::default().unwrap();
+        let shared_key = key_chain.find_generic_password("my-secrets", "my-secrets");
+
+        if let Err(err) = &shared_key {
+            panic!("Can not read settings from keychain. Err: {}", err);
+        }
+
+        let shared_key = shared_key.unwrap();
+
+        Self {
+            shared_key: String::from_utf8(shared_key.0.to_vec()).unwrap(),
+        }
+
+        /*
         use std::io::Read;
 
         let file_name = crate::file::compile_full_filename(".my-secrets.yaml");
@@ -23,6 +37,7 @@ impl SettingsModel {
             },
             Err(_) => panic!("Can not read settings from file: {}", file_name),
         }
+         */
     }
 
     pub fn get_iv(&self) -> [u8; 16] {
