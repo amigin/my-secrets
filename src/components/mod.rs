@@ -1,4 +1,4 @@
-mod modal_windows;
+mod render_dialog;
 pub mod side_panel;
 
-pub use modal_windows::*;
+pub use render_dialog::*;

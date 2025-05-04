@@ -8,6 +8,8 @@ pub enum SizePanelEvent {
 pub fn render(app: &mut MyApp, ui: &mut egui::Ui) -> Option<SizePanelEvent> {
     let mut result = None;
 
+    let is_editing = app.edit_state.is_editing();
+
     for (category, sub_categories) in &app.categories {
         //   ui.set_style(app.category_style.clone());
 
@@ -23,8 +25,10 @@ pub fn render(app: &mut MyApp, ui: &mut egui::Ui) -> Option<SizePanelEvent> {
 
             let response = ui.selectable_label(checked, widget_text);
 
-            if response.clicked() && !app.editing {
-                result = Some(SizePanelEvent::CategorySelected(category.to_string()));
+            if !is_editing {
+                if response.clicked() {
+                    result = Some(SizePanelEvent::CategorySelected(category.to_string()));
+                }
             }
         });
 
@@ -44,16 +48,8 @@ pub fn render(app: &mut MyApp, ui: &mut egui::Ui) -> Option<SizePanelEvent> {
 
                             let response = ui.selectable_label(checked, sub_category);
 
-                            if response.clicked() && !app.editing {
-                                if let Some(selected_sub_category) = &app.active_sub_category {
-                                    if &selected_sub_category.sub_category_id == sub_category {
-                                        result = Some(SizePanelEvent::SubCategorySelected(None));
-                                    } else {
-                                        result = Some(SizePanelEvent::SubCategorySelected(Some(
-                                            sub_category.to_string(),
-                                        )));
-                                    }
-                                } else {
+                            if !is_editing {
+                                if response.clicked() && !is_editing {
                                     result = Some(SizePanelEvent::SubCategorySelected(Some(
                                         sub_category.to_string(),
                                     )));

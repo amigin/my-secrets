@@ -1,16 +1,19 @@
 mod components;
 mod file;
 mod password_utils;
+mod render_bottom_panel;
 mod settings;
+mod states;
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 use components::*;
-use egui::{FontData, FontDefinitions, Style, TextBuffer};
+use egui::{FontData, FontDefinitions, TextBuffer};
 use encryption::aes::AesKey;
-use native_dialog::MessageDialog;
 
 use crate::settings::SettingsModel;
+
+use crate::states::*;
 
 const FONT_MESLO: &[u8] = std::include_bytes!("../fonts/MesloLGS NF Regular.ttf");
 
@@ -23,9 +26,6 @@ pub struct MyApp {
     settings: SettingsModel,
     pub authenticated: Option<AesKey>,
 
-    pub auth_window_error_message: Option<String>,
-
-    pub password: String,
     pub categories: BTreeMap<String, BTreeMap<String, String>>,
 
     pub selected_category: Option<String>,
@@ -34,16 +34,15 @@ pub struct MyApp {
 
     pub has_not_saved_data: bool,
 
-    pub modal_dialog: Option<ModalWindowState>,
-    pub editing: bool,
-
-    pub normal_style: Arc<Style>,
-    pub category_style: Arc<Style>,
+    pub modal_dialog: ModalDialog,
+    pub edit_state: EditingState,
+    //pub normal_style: Rc<Style>,
+    //pub category_style: Rc<Style>,
 }
 
 impl TextBuffer for MyApp {
     fn is_mutable(&self) -> bool {
-        self.editing
+        self.edit_state.is_editing()
     }
 
     fn as_str(&self) -> &str {
@@ -91,7 +90,7 @@ impl MyApp {
         }
 
         self.has_not_saved_data = false;
-        self.editing = false;
+        self.edit_state.finish_editing();
     }
 
     pub fn cancel_not_saved_data(&mut self) {
@@ -106,16 +105,7 @@ impl MyApp {
         }
 
         self.has_not_saved_data = false;
-        self.editing = false;
-    }
-
-    pub fn load_from_file(&mut self, aes_key: &AesKey) -> bool {
-        if let Some(result) = crate::file::load_file(aes_key) {
-            self.categories = result;
-            true
-        } else {
-            false
-        }
+        self.edit_state.finish_editing();
     }
 
     pub fn select_category(&mut self, category_id: Option<String>) {
@@ -152,39 +142,47 @@ impl MyApp {
             });
         }
     }
+
+    pub fn handle_dialog_result(&mut self, dialog_result: ShowDialogResult) {
+        match dialog_result {
+            ShowDialogResult::DialogIsBeingRendered => {}
+            ShowDialogResult::Authenticated { aes_key, data } => {
+                self.categories = data;
+                self.authenticated = Some(aes_key);
+                self.edit_state.extend_expiration_time();
+                self.modal_dialog.set_none();
+            }
+            ShowDialogResult::CreatedSubCategory(sub_category) => {
+                self.select_sub_category(Some(sub_category));
+                self.modal_dialog.set_none();
+            }
+            ShowDialogResult::CreatedCategory(category) => {
+                self.select_category(Some(category));
+                self.modal_dialog.set_none();
+            }
+            ShowDialogResult::RenameCategory(category) => {
+                let from = self.selected_category.as_ref().unwrap().to_string();
+                self.select_category(None);
+
+                let removed = self.categories.remove(&from).unwrap();
+
+                self.categories.insert(category.clone(), removed);
+
+                self.select_category(Some(category));
+                self.has_not_saved_data = true;
+                self.modal_dialog.set_none();
+            }
+            ShowDialogResult::Cancel => {
+                self.modal_dialog.set_none();
+            }
+        }
+    }
 }
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let show_dialog_result = crate::render_dialog(self, ctx);
-
-        if let Some(show_dialog_result) = show_dialog_result {
-            match show_dialog_result {
-                ShowDialogResult::None => {}
-                ShowDialogResult::CreatedSubCategory(sub_category) => {
-                    self.select_sub_category(Some(sub_category));
-                    self.modal_dialog = None;
-                }
-                ShowDialogResult::CloseDialog => {
-                    self.modal_dialog = None;
-                }
-                ShowDialogResult::CreatedCategory(category) => {
-                    self.select_category(Some(category));
-                    self.modal_dialog = None;
-                }
-                ShowDialogResult::RenameCategory(category) => {
-                    let from = self.selected_category.as_ref().unwrap().to_string();
-                    self.select_category(None);
-
-                    let removed = self.categories.remove(&from).unwrap();
-
-                    self.categories.insert(category.clone(), removed);
-
-                    self.select_category(Some(category));
-                    self.modal_dialog = None;
-                    self.has_not_saved_data = true;
-                }
-            }
+        if let Some(dialog_result) = self.render_dialog(ctx) {
+            self.handle_dialog_result(dialog_result);
             return;
         }
 
@@ -193,9 +191,11 @@ impl eframe::App for MyApp {
                 match result {
                     side_panel::SizePanelEvent::SubCategorySelected(sub_category) => {
                         self.select_sub_category(sub_category);
+                        self.edit_state.extend_expiration_time();
                     }
                     side_panel::SizePanelEvent::CategorySelected(category) => {
                         self.select_category(Some(category));
+                        self.edit_state.extend_expiration_time();
                     }
                 }
             }
@@ -225,65 +225,8 @@ impl eframe::App for MyApp {
                 );
             }
         });
-        egui::TopBottomPanel::bottom("bottom panel").show(ctx, |ui| {
-            ui.horizontal_centered(|ui| {
-                if !self.editing {
-                    if ui.small_button("Add category").clicked() {
-                        self.modal_dialog = Some(ModalWindowState::CreateCategory("".to_string()));
-                    };
 
-                    if let Some(selected_category) = &self.selected_category {
-                        if ui.small_button("Rename category").clicked() {
-                            self.modal_dialog =
-                                Some(ModalWindowState::RenameCategory(selected_category.clone()));
-                        };
-
-                        if ui.small_button("Add subcategory").clicked() {
-                            self.modal_dialog =
-                                Some(ModalWindowState::CreateSubCategory("".to_string()));
-                        };
-
-                        if ui.small_button("Edit").clicked() {
-                            self.editing = true;
-                        };
-                    }
-                } else {
-                    if !self.has_not_saved_data {
-                        if ui.small_button("Stop editing").clicked() {
-                            self.editing = false;
-                        };
-                    }
-                }
-
-                if self.has_not_saved_data {
-                    if ui.small_button("Save").clicked() {
-                        let confirm = MessageDialog::new()
-                            .set_type(native_dialog::MessageType::Warning)
-                            .set_title("Confirmation")
-                            .set_text("Please confirm that you want to save the changes.")
-                            .show_confirm()
-                            .unwrap();
-
-                        if confirm {
-                            self.save_to_file();
-                        }
-                    };
-
-                    if ui.small_button("Cancel").clicked() {
-                        let confirm = MessageDialog::new()
-                            .set_type(native_dialog::MessageType::Warning)
-                            .set_title("Confirmation")
-                            .set_text("Please confirm that you want to cancel the changes.")
-                            .show_confirm()
-                            .unwrap();
-
-                        if confirm {
-                            self.cancel_not_saved_data();
-                        }
-                    };
-                }
-            });
-        });
+        self.render_bottom_panel(ctx);
     }
 }
 
@@ -308,16 +251,15 @@ fn main() {
     let app = MyApp {
         authenticated: None,
         categories: BTreeMap::new(),
-        password: String::new(),
+
         selected_category: None,
-        modal_dialog: Some(ModalWindowState::Authenticate),
+        modal_dialog: Default::default(),
         active_sub_category: None,
         has_not_saved_data: false,
-        editing: false,
-        normal_style: Arc::new(style.clone()),
-        category_style: Arc::new(category_style),
+        edit_state: EditingState::new(),
+        //normal_style: Rc::new(style.clone()),
+        //category_style: Rc::new(category_style),
         settings,
-        auth_window_error_message: None,
     };
 
     let mut native_options = eframe::NativeOptions::default();
