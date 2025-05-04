@@ -8,12 +8,12 @@ impl TextBuffer for MyApp {
     }
 
     fn as_str(&self) -> &str {
-        self.active_sub_category.as_ref().unwrap().text.as_str()
+        self.selected_sub_category.as_ref().unwrap().text.as_str()
     }
 
     fn insert_text(&mut self, text: &str, char_index: usize) -> usize {
         self.has_not_saved_data = true;
-        self.active_sub_category
+        self.selected_sub_category
             .as_mut()
             .unwrap()
             .text
@@ -22,7 +22,7 @@ impl TextBuffer for MyApp {
 
     fn delete_char_range(&mut self, char_range: std::ops::Range<usize>) {
         self.has_not_saved_data = true;
-        self.active_sub_category
+        self.selected_sub_category
             .as_mut()
             .unwrap()
             .text

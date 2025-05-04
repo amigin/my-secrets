@@ -6,8 +6,6 @@ mod settings;
 mod states;
 mod text_buffer;
 
-use std::collections::BTreeMap;
-
 use components::*;
 use egui::{FontData, FontDefinitions};
 
@@ -17,22 +15,12 @@ use crate::states::*;
 
 const FONT_MESLO: &[u8] = std::include_bytes!("../fonts/MesloLGS NF Regular.ttf");
 
-#[derive(Clone)]
-pub struct SelectedSubcategory {
-    pub sub_category_id: String,
-    pub text: String,
-}
-
 pub struct MyApp {
     settings: SettingsModel,
     pub authenticated: Option<AuthenticatedState>,
-
     pub selected_category: Option<String>,
-
-    pub active_sub_category: Option<SelectedSubcategory>,
-
+    pub selected_sub_category: Option<SelectedSubCategoryState>,
     pub has_not_saved_data: bool,
-
     pub modal_dialog: ModalDialog,
     pub edit_state: EditingState,
     //pub normal_style: Rc<Style>,
@@ -43,7 +31,7 @@ impl MyApp {
     fn get_content_ref_mut(&mut self) -> &mut TypeContent {
         &mut self.authenticated.as_mut().unwrap().content
     }
-
+    /*
     fn get_content_by_selected_category_mut(&mut self) -> &mut BTreeMap<String, String> {
         match &self.selected_category {
             Some(selected_category) => {
@@ -59,6 +47,7 @@ impl MyApp {
         }
     }
 
+
     fn get_content_by_selected_category(&self) -> &BTreeMap<String, String> {
         match &self.selected_category {
             Some(selected_category) => {
@@ -69,8 +58,48 @@ impl MyApp {
                 panic!("There is not selected category")
             }
         }
+    } */
+
+    fn update_edited_content(&mut self) -> &AuthenticatedState {
+        let selected_category = match &self.selected_category {
+            Some(selected_category) => selected_category,
+            None => {
+                panic!("There is not selected category")
+            }
+        };
+
+        let selected_sub_category = match &self.selected_sub_category {
+            Some(selected_sub_category) => selected_sub_category.clone(),
+            None => {
+                panic!("There is not selected category")
+            }
+        };
+
+        let authenticated_state = self.authenticated.as_mut().unwrap();
+
+        if let Some(sub_level_data) = authenticated_state.content.get_mut(selected_category) {
+            sub_level_data.insert(selected_sub_category.id, selected_sub_category.text);
+        }
+
+        authenticated_state
     }
 
+    fn get_selected_content(&self, sub_category_id: &str) -> Option<&str> {
+        let auth_data = self.authenticated.as_ref()?;
+
+        let selected_category = self.selected_category.as_ref()?;
+
+        let first_level = auth_data.content.get(selected_category)?;
+
+        let result = match first_level.get(sub_category_id) {
+            Some(value) => value.as_str(),
+            None => "",
+        };
+
+        Some(result)
+    }
+
+    /*
     pub fn flush_active_subcategory(&mut self) {
         if let Some(active_subcategory) = self.active_sub_category.take() {
             self.get_content_by_selected_category_mut().insert(
@@ -81,31 +110,27 @@ impl MyApp {
             self.active_sub_category = Some(active_subcategory);
         }
     }
+     */
 
     pub fn save_to_file(&mut self) {
-        self.flush_active_subcategory();
-        if let Some(state) = &self.authenticated {
-            crate::file::save_to_file(&state.aes_key, &state.content);
-        }
-
-        self.has_not_saved_data = false;
+        let state = self.update_edited_content();
+        crate::file::save_to_file(&state.aes_key, &state.content);
         self.edit_state.finish_editing();
+        self.has_not_saved_data = false;
     }
 
     pub fn cancel_not_saved_data(&mut self) {
-        if let Some(selected_sub_category) = self.active_sub_category.clone() {
-            self.get_content_by_selected_category_mut().insert(
-                selected_sub_category.sub_category_id,
-                selected_sub_category.text,
-            );
+        let prev_content = self.edit_state.finish_editing();
+
+        if let Some(sub_category_content) = self.selected_sub_category.as_mut() {
+            sub_category_content.text = prev_content;
         }
 
         self.has_not_saved_data = false;
-        self.edit_state.finish_editing();
     }
 
     pub fn select_category(&mut self, category_id: Option<String>) {
-        if self.active_sub_category.is_some() {
+        if self.selected_sub_category.is_some() {
             self.select_sub_category(None);
         }
 
@@ -113,23 +138,17 @@ impl MyApp {
     }
 
     pub fn select_sub_category(&mut self, sub_category_id: Option<String>) {
-        let prev_subcategory = self.active_sub_category.take();
-        if let Some(prev_subcategory) = prev_subcategory {
-            self.get_content_by_selected_category_mut()
-                .insert(prev_subcategory.sub_category_id, prev_subcategory.text);
-        }
-
-        if let Some(sub_category_id) = sub_category_id {
-            let text = self
-                .get_content_by_selected_category()
-                .get(&sub_category_id)
-                .unwrap()
-                .to_string();
-
-            self.active_sub_category = Some(crate::SelectedSubcategory {
-                sub_category_id,
-                text,
-            });
+        match sub_category_id {
+            Some(sub_category_id) => {
+                let content = self.get_selected_content(&sub_category_id).unwrap();
+                self.selected_sub_category = Some(SelectedSubCategoryState {
+                    id: sub_category_id,
+                    text: content.to_string(),
+                });
+            }
+            None => {
+                self.selected_sub_category = None;
+            }
         }
     }
 
@@ -196,7 +215,7 @@ impl eframe::App for MyApp {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            if self.active_sub_category.is_some() {
+            if self.selected_sub_category.is_some() {
                 // let width = ui.available_width();
                 let h = ui.available_height();
                 //println!(" {}x{}", width, h);
@@ -246,7 +265,7 @@ fn main() {
         authenticated: None,
         selected_category: None,
         modal_dialog: Default::default(),
-        active_sub_category: None,
+        selected_sub_category: None,
         has_not_saved_data: false,
         edit_state: EditingState::new(),
         //normal_style: Rc::new(style.clone()),

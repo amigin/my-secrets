@@ -10,7 +10,9 @@ pub fn render(app: &mut MyApp, ui: &mut egui::Ui) -> Option<SizePanelEvent> {
 
     let is_editing = app.edit_state.is_editing();
 
-    for (category, sub_categories) in &app.authenticated.as_ref().unwrap().content {
+    let authenticated = app.authenticated.as_ref()?;
+
+    for (category, sub_categories) in &authenticated.content {
         //   ui.set_style(app.category_style.clone());
 
         ui.vertical_centered_justified(|ui| {
@@ -40,11 +42,12 @@ pub fn render(app: &mut MyApp, ui: &mut egui::Ui) -> Option<SizePanelEvent> {
                             ui.text_style_height(&egui::TextStyle::Monospace);
                             ui.label("⇢ ");
 
-                            let checked = if let Some(selected) = &app.active_sub_category {
-                                &selected.sub_category_id == sub_category
-                            } else {
-                                false
-                            };
+                            let checked =
+                                if let Some(selected_sub_category) = &app.selected_sub_category {
+                                    &selected_sub_category.id == sub_category
+                                } else {
+                                    false
+                                };
 
                             let response = ui.selectable_label(checked, sub_category);
 

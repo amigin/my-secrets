@@ -1,5 +1,6 @@
+use rfd::{MessageDialog, MessageDialogResult, MessageLevel};
+
 use crate::{states::*, MyApp};
-use native_dialog::MessageDialog;
 
 impl MyApp {
     pub fn render_bottom_panel(&mut self, ctx: &egui::Context) {
@@ -28,9 +29,10 @@ impl MyApp {
                                 .set(ModalWindowState::CreateSubCategory("".to_string()));
                         };
 
-                        if self.active_sub_category.is_some() {
+                        if let Some(selected_sub_category) = self.selected_sub_category.as_ref() {
                             if ui.small_button("Edit").clicked() {
-                                self.edit_state.start_editing();
+                                self.edit_state
+                                    .start_editing(selected_sub_category.text.to_string());
                             };
                         }
                     }
@@ -38,27 +40,27 @@ impl MyApp {
 
                 if self.has_not_saved_data {
                     if ui.small_button("Save").clicked() {
-                        let confirm = MessageDialog::new()
-                            .set_type(native_dialog::MessageType::Warning)
+                        let dialog_result = MessageDialog::new()
+                            .set_level(rfd::MessageLevel::Warning)
                             .set_title("Confirmation")
-                            .set_text("Please confirm that you want to save the changes.")
-                            .show_confirm()
-                            .unwrap();
+                            .set_buttons(rfd::MessageButtons::YesNo)
+                            .set_description("Please confirm that you want to save the changes.")
+                            .show();
 
-                        if confirm {
+                        if let MessageDialogResult::Yes = dialog_result {
                             self.save_to_file();
                         }
                     };
 
                     if ui.small_button("Cancel").clicked() {
-                        let confirm = MessageDialog::new()
-                            .set_type(native_dialog::MessageType::Warning)
+                        let dialog_result = MessageDialog::new()
+                            .set_level(MessageLevel::Warning)
                             .set_title("Confirmation")
-                            .set_text("Please confirm that you want to cancel the changes.")
-                            .show_confirm()
-                            .unwrap();
+                            .set_buttons(rfd::MessageButtons::YesNo)
+                            .set_description("Please confirm that you want to cancel the changes.")
+                            .show();
 
-                        if confirm {
+                        if let MessageDialogResult::Yes = dialog_result {
                             self.cancel_not_saved_data();
                         }
                     };
