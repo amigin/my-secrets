@@ -4,12 +4,12 @@ mod password_utils;
 mod render_bottom_panel;
 mod settings;
 mod states;
+mod text_buffer;
 
 use std::collections::BTreeMap;
 
 use components::*;
-use egui::{FontData, FontDefinitions, TextBuffer};
-use encryption::aes::AesKey;
+use egui::{FontData, FontDefinitions};
 
 use crate::settings::SettingsModel;
 
@@ -17,6 +17,7 @@ use crate::states::*;
 
 const FONT_MESLO: &[u8] = std::include_bytes!("../fonts/MesloLGS NF Regular.ttf");
 
+#[derive(Clone)]
 pub struct SelectedSubcategory {
     pub sub_category_id: String,
     pub text: String,
@@ -24,9 +25,7 @@ pub struct SelectedSubcategory {
 
 pub struct MyApp {
     settings: SettingsModel,
-    pub authenticated: Option<AesKey>,
-
-    pub categories: BTreeMap<String, BTreeMap<String, String>>,
+    pub authenticated: Option<AuthenticatedState>,
 
     pub selected_category: Option<String>,
 
@@ -40,44 +39,44 @@ pub struct MyApp {
     //pub category_style: Rc<Style>,
 }
 
-impl TextBuffer for MyApp {
-    fn is_mutable(&self) -> bool {
-        self.edit_state.is_editing()
-    }
-
-    fn as_str(&self) -> &str {
-        self.active_sub_category.as_ref().unwrap().text.as_str()
-    }
-
-    fn insert_text(&mut self, text: &str, char_index: usize) -> usize {
-        self.has_not_saved_data = true;
-        self.active_sub_category
-            .as_mut()
-            .unwrap()
-            .text
-            .insert_text(text, char_index)
-    }
-
-    fn delete_char_range(&mut self, char_range: std::ops::Range<usize>) {
-        self.has_not_saved_data = true;
-        self.active_sub_category
-            .as_mut()
-            .unwrap()
-            .text
-            .delete_char_range(char_range)
-    }
-}
-
 impl MyApp {
+    fn get_content_ref_mut(&mut self) -> &mut TypeContent {
+        &mut self.authenticated.as_mut().unwrap().content
+    }
+
+    fn get_content_by_selected_category_mut(&mut self) -> &mut BTreeMap<String, String> {
+        match &self.selected_category {
+            Some(selected_category) => {
+                let authenticated_state = self.authenticated.as_mut().unwrap();
+                authenticated_state
+                    .content
+                    .get_mut(selected_category)
+                    .unwrap()
+            }
+            None => {
+                panic!("There is not selected category")
+            }
+        }
+    }
+
+    fn get_content_by_selected_category(&self) -> &BTreeMap<String, String> {
+        match &self.selected_category {
+            Some(selected_category) => {
+                let authenticated_state = self.authenticated.as_ref().unwrap();
+                authenticated_state.content.get(selected_category).unwrap()
+            }
+            None => {
+                panic!("There is not selected category")
+            }
+        }
+    }
+
     pub fn flush_active_subcategory(&mut self) {
         if let Some(active_subcategory) = self.active_sub_category.take() {
-            self.categories
-                .get_mut(self.selected_category.as_ref().unwrap())
-                .unwrap()
-                .insert(
-                    active_subcategory.sub_category_id.clone(),
-                    active_subcategory.text.clone(),
-                );
+            self.get_content_by_selected_category_mut().insert(
+                active_subcategory.sub_category_id.clone(),
+                active_subcategory.text.clone(),
+            );
 
             self.active_sub_category = Some(active_subcategory);
         }
@@ -85,8 +84,8 @@ impl MyApp {
 
     pub fn save_to_file(&mut self) {
         self.flush_active_subcategory();
-        if let Some(aes_key) = &self.authenticated {
-            crate::file::save_to_file(aes_key, &self.categories);
+        if let Some(state) = &self.authenticated {
+            crate::file::save_to_file(&state.aes_key, &state.content);
         }
 
         self.has_not_saved_data = false;
@@ -94,14 +93,11 @@ impl MyApp {
     }
 
     pub fn cancel_not_saved_data(&mut self) {
-        if let Some(selected_sub_category) = &self.active_sub_category {
-            self.categories
-                .get_mut(self.selected_category.as_ref().unwrap())
-                .unwrap()
-                .insert(
-                    selected_sub_category.sub_category_id.to_string(),
-                    selected_sub_category.text.clone(),
-                );
+        if let Some(selected_sub_category) = self.active_sub_category.clone() {
+            self.get_content_by_selected_category_mut().insert(
+                selected_sub_category.sub_category_id,
+                selected_sub_category.text,
+            );
         }
 
         self.has_not_saved_data = false;
@@ -119,19 +115,13 @@ impl MyApp {
     pub fn select_sub_category(&mut self, sub_category_id: Option<String>) {
         let prev_subcategory = self.active_sub_category.take();
         if let Some(prev_subcategory) = prev_subcategory {
-            self.categories
-                .get_mut(self.selected_category.as_ref().unwrap())
-                .unwrap()
+            self.get_content_by_selected_category_mut()
                 .insert(prev_subcategory.sub_category_id, prev_subcategory.text);
         }
 
         if let Some(sub_category_id) = sub_category_id {
-            let selected_category = self
-                .categories
-                .get(self.selected_category.as_ref().unwrap());
-
-            let text = selected_category
-                .unwrap()
+            let text = self
+                .get_content_by_selected_category()
                 .get(&sub_category_id)
                 .unwrap()
                 .to_string();
@@ -147,8 +137,10 @@ impl MyApp {
         match dialog_result {
             ShowDialogResult::DialogIsBeingRendered => {}
             ShowDialogResult::Authenticated { aes_key, data } => {
-                self.categories = data;
-                self.authenticated = Some(aes_key);
+                self.authenticated = Some(AuthenticatedState {
+                    aes_key,
+                    content: data,
+                });
                 self.edit_state.extend_expiration_time();
                 self.modal_dialog.set_none();
             }
@@ -160,15 +152,17 @@ impl MyApp {
                 self.select_category(Some(category));
                 self.modal_dialog.set_none();
             }
-            ShowDialogResult::RenameCategory(category) => {
+            ShowDialogResult::RenameCategory(new_category_name) => {
                 let from = self.selected_category.as_ref().unwrap().to_string();
                 self.select_category(None);
 
-                let removed = self.categories.remove(&from).unwrap();
+                let content = self.get_content_ref_mut();
 
-                self.categories.insert(category.clone(), removed);
+                let removed = content.remove(&from).unwrap();
 
-                self.select_category(Some(category));
+                content.insert(new_category_name.clone(), removed);
+
+                self.select_category(Some(new_category_name));
                 self.has_not_saved_data = true;
                 self.modal_dialog.set_none();
             }
@@ -250,8 +244,6 @@ fn main() {
 
     let app = MyApp {
         authenticated: None,
-        categories: BTreeMap::new(),
-
         selected_category: None,
         modal_dialog: Default::default(),
         active_sub_category: None,

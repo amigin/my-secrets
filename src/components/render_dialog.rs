@@ -30,6 +30,7 @@ impl MyApp {
         match modal_dialog {
             ModalWindowState::None => {
                 if self.edit_state.activity_expired() {
+                    self.authenticated = None;
                     self.modal_dialog
                         .set(ModalWindowState::Authenticate(Default::default()));
                 }
@@ -61,7 +62,10 @@ impl MyApp {
                 {
                     match dialog_result {
                         DialogResult::Ok => {
-                            self.categories
+                            self.authenticated
+                                .as_mut()
+                                .unwrap()
+                                .content
                                 .insert(category.to_string(), BTreeMap::new());
                             self.has_not_saved_data = true;
                             return Some(ShowDialogResult::CreatedCategory(category.to_string()));
@@ -96,7 +100,10 @@ impl MyApp {
                 {
                     match dialog_result {
                         DialogResult::Ok => {
-                            self.categories
+                            self.authenticated
+                                .as_mut()
+                                .unwrap()
+                                .content
                                 .get_mut(self.selected_category.as_ref().unwrap())
                                 .unwrap()
                                 .insert(sub_category.to_string(), "".to_string());

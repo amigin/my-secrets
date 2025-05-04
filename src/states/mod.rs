@@ -4,3 +4,5 @@ mod authenticate_state;
 pub use authenticate_state::*;
 mod editing_state;
 pub use editing_state::*;
+mod authenticated_state;
+pub use authenticated_state::*;

@@ -10,7 +10,7 @@ pub fn render(app: &mut MyApp, ui: &mut egui::Ui) -> Option<SizePanelEvent> {
 
     let is_editing = app.edit_state.is_editing();
 
-    for (category, sub_categories) in &app.categories {
+    for (category, sub_categories) in &app.authenticated.as_ref().unwrap().content {
         //   ui.set_style(app.category_style.clone());
 
         ui.vertical_centered_justified(|ui| {
